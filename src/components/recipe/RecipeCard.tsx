@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { CATEGORY_LABELS, DIET_LABELS } from "@/lib/constants";
+import { isOptimizableImage } from "@/lib/images";
 import { formatMinutes } from "@/lib/utils";
 import { ClockIcon, DifficultyBadge, StarIcon } from "@/components/recipe/RecipeMeta";
 import type { RecipeSummary } from "@/types/recipe";
@@ -21,6 +22,7 @@ export default function RecipeCard({ recipe, priority = false }: RecipeCardProps
             alt={recipe.title}
             fill
             priority={priority}
+            unoptimized={!isOptimizableImage(recipe.coverImage)}
             sizes="(min-width: 1280px) 25vw, (min-width: 768px) 33vw, (min-width: 640px) 50vw, 100vw"
             className="object-cover transition duration-300 group-hover:scale-105"
           />

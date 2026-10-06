@@ -84,6 +84,7 @@ export default function LoginForm({ callbackUrl, googleEnabled, initialError }: 
             placeholder="Your password"
           />
         </Form.Item>
+
         <Button type="primary" htmlType="submit" size="large" block loading={submitting}>
           Log in
         </Button>

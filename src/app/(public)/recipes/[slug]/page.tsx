@@ -6,19 +6,35 @@ import { notFound } from "next/navigation";
 import RecipeGrid from "@/components/recipe/RecipeGrid";
 import { ClockIcon, DifficultyBadge, UsersIcon } from "@/components/recipe/RecipeMeta";
 import { CATEGORY_LABELS, DIET_LABELS } from "@/lib/constants";
-import { getPublishedRecipeBySlug, getRelatedRecipes } from "@/lib/recipes";
+import { isOptimizableImage } from "@/lib/images";
+import { getPublishedRecipeBySlug, getRecipeBySlug, getRelatedRecipes } from "@/lib/recipes";
+import { canModify, getSessionUser } from "@/lib/session";
 import { formatMinutes, formatQuantity } from "@/lib/utils";
 import type { RecipeDetail } from "@/types/recipe";
 
-// Dedupe the DB query between generateMetadata and the page
-const getRecipe = cache(getPublishedRecipeBySlug);
+/**
+ * Published recipes for everyone; drafts only for their author (or an admin) as a
+ * preview. Cached so generateMetadata and the page share one lookup per request.
+ */
+const getViewableRecipe = cache(async (slug: string) => {
+  const user = await getSessionUser();
+  let recipe = await getPublishedRecipeBySlug(slug);
+  if (!recipe && user) {
+    const draft = await getRecipeBySlug(slug);
+    if (draft && canModify(user, draft.author.id)) recipe = draft;
+  }
+  return { recipe, user };
+});
 
 export async function generateMetadata({
   params,
 }: PageProps<"/recipes/[slug]">): Promise<Metadata> {
   const { slug } = await params;
-  const recipe = await getRecipe(slug);
+  const { recipe } = await getViewableRecipe(slug);
   if (!recipe) return { title: "Recipe not found" };
+  if (recipe.status === "draft") {
+    return { title: `${recipe.title} (draft)`, robots: { index: false, follow: false } };
+  }
 
   return {
     title: recipe.title,
@@ -74,10 +90,12 @@ function recipeJsonLd(recipe: RecipeDetail) {
 
 export default async function RecipeDetailPage({ params }: PageProps<"/recipes/[slug]">) {
   const { slug } = await params;
-  const recipe = await getRecipe(slug);
+  const { recipe, user } = await getViewableRecipe(slug);
   if (!recipe) notFound();
 
-  const related = await getRelatedRecipes(recipe);
+  const isDraft = recipe.status === "draft";
+  const canEdit = Boolean(user && canModify(user, recipe.author.id));
+  const related = isDraft ? [] : await getRelatedRecipes(recipe);
   const stats = [
     { label: "Prep", value: formatMinutes(recipe.prepTime) },
     { label: "Cook", value: recipe.cookTime ? formatMinutes(recipe.cookTime) : "No cook" },
@@ -87,13 +105,30 @@ export default async function RecipeDetailPage({ params }: PageProps<"/recipes/[
 
   return (
     <article className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
-      <script
-        type="application/ld+json"
-        // JSON.stringify output with "<" escaped is safe to inline
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(recipeJsonLd(recipe)).replace(/</g, "\\u003c"),
-        }}
-      />
+      {isDraft ? (
+        <div
+          role="status"
+          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-brand-lg border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200"
+        >
+          <span>
+            <strong>Draft preview.</strong> Only you can see this recipe until it&apos;s published.
+          </span>
+          <Link
+            href={`/recipes/${recipe.slug}/edit`}
+            className="rounded-brand bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-700"
+          >
+            Continue editing
+          </Link>
+        </div>
+      ) : (
+        <script
+          type="application/ld+json"
+          // JSON.stringify output with "<" escaped is safe to inline
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(recipeJsonLd(recipe)).replace(/</g, "\\u003c"),
+          }}
+        />
+      )}
 
       <nav aria-label="Breadcrumb" className="mb-6 text-sm text-muted">
         <ol className="flex flex-wrap items-center gap-1.5">
@@ -124,6 +159,7 @@ export default async function RecipeDetailPage({ params }: PageProps<"/recipes/[
               fill
               priority
               sizes="(min-width: 1024px) 55vw, 100vw"
+              unoptimized={!isOptimizableImage(recipe.coverImage)}
               className="object-cover"
             />
           )}
@@ -140,6 +176,14 @@ export default async function RecipeDetailPage({ params }: PageProps<"/recipes/[
             By <span className="font-semibold text-foreground">{recipe.author.name}</span>
             {recipe.author.username && <> · @{recipe.author.username}</>}
           </p>
+          {canEdit && !isDraft && (
+            <Link
+              href={`/recipes/${recipe.slug}/edit`}
+              className="mt-3 inline-flex items-center gap-1 rounded-brand border border-border px-3 py-1.5 text-sm font-semibold hover:border-brand hover:text-brand"
+            >
+              <span aria-hidden>✏️</span> Edit recipe
+            </Link>
+          )}
           <p className="mt-4 text-lg leading-relaxed text-muted">{recipe.description}</p>
 
           <div className="mt-5 flex flex-wrap items-center gap-2">
@@ -206,10 +250,24 @@ export default async function RecipeDetailPage({ params }: PageProps<"/recipes/[
                 >
                   {step.order}
                 </span>
-                <p className="pt-1 leading-relaxed">
-                  <span className="sr-only">Step {step.order}: </span>
-                  {step.text}
-                </p>
+                <div className="min-w-0 flex-1 space-y-3">
+                  <p className="pt-1 leading-relaxed">
+                    <span className="sr-only">Step {step.order}: </span>
+                    {step.text}
+                  </p>
+                  {step.image && (
+                    <div className="relative aspect-video max-w-md overflow-hidden rounded-brand border border-border">
+                      <Image
+                        src={step.image}
+                        alt={`Step ${step.order}`}
+                        fill
+                        sizes="(min-width: 768px) 448px, 90vw"
+                        unoptimized={!isOptimizableImage(step.image)}
+                        className="object-cover"
+                      />
+                    </div>
+                  )}
+                </div>
               </li>
             ))}
           </ol>

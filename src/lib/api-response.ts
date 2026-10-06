@@ -28,12 +28,22 @@ export function fail(
   );
 }
 
+/** Zod issues → { "title": [...], "ingredients.2.name": [...] } (dotted paths for nested fields). */
+export function zodFieldErrors(error: z.ZodError): FieldErrors {
+  const out: Record<string, string[]> = {};
+  for (const issue of error.issues) {
+    const key = issue.path.map(String).join(".") || "_form";
+    (out[key] ??= []).push(issue.message);
+  }
+  return out;
+}
+
 /** Map any thrown error to a consistent JSON error response. */
 export function handleRouteError(error: unknown) {
   if (error instanceof z.ZodError) {
     return fail(422, "Validation failed", {
       code: "VALIDATION_ERROR",
-      fieldErrors: z.flattenError(error).fieldErrors as FieldErrors,
+      fieldErrors: zodFieldErrors(error),
     });
   }
   if (error instanceof ApiError) {

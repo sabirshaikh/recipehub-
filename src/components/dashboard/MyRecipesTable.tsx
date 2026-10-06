@@ -2,10 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Button, Empty, Rate, Table, Tag, Tooltip, type TableProps } from "antd";
-import { EditOutlined, EyeOutlined, PlusOutlined } from "@ant-design/icons";
+import { useRouter } from "next/navigation";
+import { App, Button, Empty, Popconfirm, Rate, Table, Tag, Tooltip, type TableProps } from "antd";
+import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from "@ant-design/icons";
 import LinkButton from "@/components/ui/LinkButton";
+import { useDeleteRecipe } from "@/hooks/useRecipeMutations";
 import { CATEGORIES, CATEGORY_LABELS, type Category } from "@/lib/constants";
+import { isOptimizableImage } from "@/lib/images";
 import { formatMinutes } from "@/lib/utils";
 import type { RecipeSummary } from "@/types/recipe";
 
@@ -16,6 +19,20 @@ const dateFormat = new Intl.DateTimeFormat("en-IN", {
 });
 
 export default function MyRecipesTable({ recipes }: { recipes: RecipeSummary[] }) {
+  const router = useRouter();
+  const { message } = App.useApp();
+  const remove = useDeleteRecipe();
+
+  async function handleDelete(recipe: RecipeSummary) {
+    try {
+      await remove.mutateAsync(recipe);
+      message.success(`Deleted “${recipe.title}”`);
+      router.refresh(); // this table is server-rendered
+    } catch {
+      // The API client already shows a notification for server errors
+    }
+  }
+
   const columns: TableProps<RecipeSummary>["columns"] = [
     {
       title: "Recipe",
@@ -25,17 +42,24 @@ export default function MyRecipesTable({ recipes }: { recipes: RecipeSummary[] }
         <div className="flex min-w-56 items-center gap-3">
           <div className="relative size-14 shrink-0 overflow-hidden rounded-brand bg-brand-50">
             {r.coverImage && (
-              <Image src={r.coverImage} alt="" fill sizes="56px" className="object-cover" />
+              <Image
+                src={r.coverImage}
+                alt=""
+                fill
+                sizes="56px"
+                unoptimized={!isOptimizableImage(r.coverImage)}
+                className="object-cover"
+              />
             )}
           </div>
           <div className="min-w-0">
-            {r.status === "published" ? (
-              <Link href={`/recipes/${r.slug}`} className="font-semibold hover:text-brand">
-                {r.title}
-              </Link>
-            ) : (
-              <span className="font-semibold">{r.title}</span>
-            )}
+            <Link
+              // Drafts open the editor; published recipes open the public page
+              href={r.status === "published" ? `/recipes/${r.slug}` : `/recipes/${r.slug}/edit`}
+              className="font-semibold hover:text-brand"
+            >
+              {r.title}
+            </Link>
             <div className="text-xs text-muted">
               {r.cuisine} · {formatMinutes(r.totalTime)}
             </div>
@@ -93,41 +117,67 @@ export default function MyRecipesTable({ recipes }: { recipes: RecipeSummary[] }
       align: "right",
       render: (_, r) => (
         <div className="flex justify-end gap-1">
-          <Tooltip title={r.status === "published" ? "View" : "Drafts aren't public yet"}>
+          <Tooltip title={r.status === "published" ? "View" : "Preview draft"}>
             <LinkButton
               href={`/recipes/${r.slug}`}
               type="text"
               icon={<EyeOutlined />}
               aria-label={`View ${r.title}`}
-              disabled={r.status !== "published"}
             />
           </Tooltip>
-          <Tooltip title="Editing arrives in Phase 3">
-            <Button type="text" icon={<EditOutlined />} aria-label={`Edit ${r.title}`} disabled />
+          <Tooltip title="Edit">
+            <LinkButton
+              href={`/recipes/${r.slug}/edit`}
+              type="text"
+              icon={<EditOutlined />}
+              aria-label={`Edit ${r.title}`}
+            />
           </Tooltip>
+          <Popconfirm
+            title="Delete this recipe?"
+            description="This can't be undone."
+            okText="Delete"
+            okButtonProps={{ danger: true }}
+            onConfirm={() => handleDelete(r)}
+          >
+            <Tooltip title="Delete">
+              <Button
+                type="text"
+                danger
+                icon={<DeleteOutlined />}
+                aria-label={`Delete ${r.title}`}
+                loading={remove.isPending && remove.variables?.id === r.id}
+              />
+            </Tooltip>
+          </Popconfirm>
         </div>
       ),
     },
   ];
 
   return (
-    <Table<RecipeSummary>
-      rowKey="id"
-      columns={columns}
-      dataSource={recipes}
-      pagination={{ pageSize: 10, hideOnSinglePage: true }}
-      scroll={{ x: "max-content" }}
-      locale={{
-        emptyText: (
-          <Empty description="You haven't submitted any recipes yet.">
-            <Tooltip title="The submit form arrives in Phase 3">
-              <Button type="primary" icon={<PlusOutlined />} disabled>
-                Submit a recipe
-              </Button>
-            </Tooltip>
-          </Empty>
-        ),
-      }}
-    />
+    <>
+      <div className="mb-4 flex justify-end">
+        <LinkButton href="/recipes/new" type="primary" icon={<PlusOutlined />}>
+          Submit a recipe
+        </LinkButton>
+      </div>
+      <Table<RecipeSummary>
+        rowKey="id"
+        columns={columns}
+        dataSource={recipes}
+        pagination={{ pageSize: 10, hideOnSinglePage: true }}
+        scroll={{ x: "max-content" }}
+        locale={{
+          emptyText: (
+            <Empty description="You haven't submitted any recipes yet.">
+              <LinkButton href="/recipes/new" type="primary" icon={<PlusOutlined />}>
+                Submit your first recipe
+              </LinkButton>
+            </Empty>
+          ),
+        }}
+      />
+    </>
   );
 }

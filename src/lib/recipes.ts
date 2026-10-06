@@ -2,6 +2,7 @@ import "server-only";
 import { isValidObjectId, type Types } from "mongoose";
 import { connectDB } from "@/lib/db";
 import { CATEGORIES, type Category } from "@/lib/constants";
+import { escapeRegex, slugify } from "@/lib/utils";
 import { Recipe } from "@/models/Recipe";
 import "@/models/User"; // registers the User model for populate()
 import type { RecipeAuthor, RecipeDetail, RecipeSummary } from "@/types/recipe";
@@ -93,9 +94,9 @@ export async function listRecipesByAuthor(authorId: string): Promise<RecipeSumma
   return docs.map(toSummary);
 }
 
-export async function getPublishedRecipeBySlug(slug: string): Promise<RecipeDetail | null> {
+async function findRecipeDetail(filter: Record<string, unknown>): Promise<RecipeDetail | null> {
   await connectDB();
-  const doc = await Recipe.findOne({ slug: slug.toLowerCase(), status: "published" })
+  const doc = await Recipe.findOne(filter)
     .select("-ingredientNames -__v")
     .populate("author", AUTHOR_FIELDS)
     .lean<LeanRecipe>();
@@ -107,6 +108,41 @@ export async function getPublishedRecipeBySlug(slug: string): Promise<RecipeDeta
     ...(toSummary(rest as LeanRecipe) as RecipeDetail),
     updatedAt: (updatedAt ?? doc.createdAt).toISOString(),
   };
+}
+
+export function getPublishedRecipeBySlug(slug: string) {
+  return findRecipeDetail({ slug: slug.toLowerCase(), status: "published" });
+}
+
+/** Any status — callers must check ownership before exposing drafts. */
+export function getRecipeBySlug(slug: string) {
+  return findRecipeDetail({ slug: slug.toLowerCase() });
+}
+
+/** Any status, by id — callers must check ownership before exposing drafts. */
+export function getRecipeById(id: string) {
+  if (!isValidObjectId(id)) return Promise.resolve(null);
+  return findRecipeDetail({ _id: id });
+}
+
+/** "Chicken Handi" → "chicken-handi", or "chicken-handi-2" if taken (ignoring `excludeId`). */
+export async function generateUniqueSlug(title: string, excludeId?: string) {
+  await connectDB();
+  const base = slugify(title).slice(0, 80) || "recipe";
+  const taken = new Set(
+    (
+      await Recipe.find({
+        slug: { $regex: `^${escapeRegex(base)}(-\\d+)?$` },
+        ...(excludeId && { _id: { $ne: excludeId } }),
+      })
+        .select("slug")
+        .lean<{ slug: string }[]>()
+    ).map((r) => r.slug),
+  );
+  if (!taken.has(base)) return base;
+  let n = 2;
+  while (taken.has(`${base}-${n}`)) n++;
+  return `${base}-${n}`;
 }
 
 /** Other published recipes in the same category or cuisine. */
