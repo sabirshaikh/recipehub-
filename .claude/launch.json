@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "recipehub-dev", "runtimeExecutable": "corepack", "runtimeArgs": ["pnpm", "dev"], "port": 3000 }
+  ]
+}
