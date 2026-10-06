@@ -9,7 +9,10 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "make-admin": "tsx scripts/make-admin.ts",
+    "seed": "tsx scripts/seed.ts",
+    "seed:user": "tsx scripts/seed-user.ts"
   },
   "dependencies": {
     "@ant-design/cssinjs": "^2.1.2",

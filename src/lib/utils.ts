@@ -33,3 +33,44 @@ export function formatMinutes(total: number) {
   if (!h) return `${m} min`;
   return m ? `${h} hr ${m} min` : `${h} hr`;
 }
+
+/**
+ * Only allow same-origin redirects. Accepts relative paths and absolute URLs on
+ * our own origin (the proxy sends absolute ones); blocks `//evil.com` and other hosts.
+ */
+export function safeCallbackUrl(url: string | null | undefined, fallback = "/dashboard") {
+  if (!url) return fallback;
+  const appOrigin =
+    typeof window === "undefined"
+      ? new URL(process.env.AUTH_URL ?? "http://localhost:3000").origin
+      : window.location.origin;
+  try {
+    const parsed = new URL(url, appOrigin);
+    if (parsed.origin !== appOrigin) return fallback;
+    const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    // Never bounce back to the auth pages themselves
+    return /^\/(login|register)(\/|\?|$)/.test(parsed.pathname + parsed.search) ? fallback : path;
+  } catch {
+    return fallback;
+  }
+}
+
+const FRACTIONS: [number, string][] = [
+  [0.125, "⅛"],
+  [0.25, "¼"],
+  [1 / 3, "⅓"],
+  [0.5, "½"],
+  [2 / 3, "⅔"],
+  [0.75, "¾"],
+];
+
+/** 1.5 → "1½", 0.25 → "¼", 2.4 → "2.4" (null → ""). */
+export function formatQuantity(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value) || value <= 0) return "";
+  const whole = Math.floor(value);
+  const rest = value - whole;
+  if (rest < 0.01) return String(whole);
+  const match = FRACTIONS.find(([f]) => Math.abs(rest - f) < 0.02);
+  if (match) return `${whole || ""}${match[1]}`;
+  return String(Math.round(value * 100) / 100);
+}

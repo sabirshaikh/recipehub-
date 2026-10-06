@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ThemeToggle from "@/components/layout/ThemeToggle";
+import UserMenu from "@/components/layout/UserMenu";
 
 const nav = [
   { href: "/recipes", label: "Recipes" },
@@ -36,7 +37,7 @@ export default function SiteHeader() {
 
         <div className="ml-auto flex items-center gap-2">
           <ThemeToggle />
-          {/* Search + user menu are added in Phase 2 / Phase 4 */}
+          <UserMenu />
         </div>
       </div>
     </header>

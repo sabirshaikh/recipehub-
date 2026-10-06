@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { AntdRegistry } from "@ant-design/nextjs-registry";
+import SiteHeader from "@/components/layout/SiteHeader";
+import SiteFooter from "@/components/layout/SiteFooter";
 import Providers from "./providers";
 import "./globals.css";
 
@@ -36,7 +38,19 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex min-h-full flex-col">
         {/* `layer` puts antd CSS in @layer antd (see globals.css for layer order) */}
         <AntdRegistry layer>
-          <Providers>{children}</Providers>
+          <Providers>
+            <a
+              href="#main"
+              className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-brand focus:bg-brand focus:px-4 focus:py-2 focus:text-white"
+            >
+              Skip to content
+            </a>
+            <SiteHeader />
+            <main id="main" className="flex flex-1 flex-col">
+              {children}
+            </main>
+            <SiteFooter />
+          </Providers>
         </AntdRegistry>
       </body>
     </html>

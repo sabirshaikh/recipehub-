@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from "react";
 import { App as AntdApp, ConfigProvider } from "antd";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { SessionProvider } from "next-auth/react";
 import { ThemeProvider, useTheme } from "next-themes";
 import { getQueryClient } from "@/lib/query-client";
 import { getAntdTheme } from "@/lib/theme";
@@ -38,13 +39,20 @@ export default function Providers({ children }: { children: ReactNode }) {
   const queryClient = getQueryClient();
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-        <AntdThemeProvider>{children}</AntdThemeProvider>
-      </ThemeProvider>
-      {process.env.NODE_ENV === "development" && (
-        <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
-      )}
-    </QueryClientProvider>
+    <SessionProvider>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <AntdThemeProvider>{children}</AntdThemeProvider>
+        </ThemeProvider>
+        {process.env.NODE_ENV === "development" && (
+          <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
+        )}
+      </QueryClientProvider>
+    </SessionProvider>
   );
 }
